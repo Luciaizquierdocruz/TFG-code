@@ -1,5 +1,5 @@
 ---
-title: "GRU Coca-Cola"
+title: "GRU Tesla"
 author: "Lucía Izquierdo"
 date: "2025-06-26"
 output: html_document
@@ -8,7 +8,6 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
 # Entorno de Python
 
 Se establece el entorno de python descragado.
@@ -55,8 +54,8 @@ library(ggplot2)
 # Carga de datos 
 
 ```{r}
-getSymbols("KO", from = "2000-01-01", to = "2024-12-31")
-data <- KO[, "KO.Close"]
+getSymbols("TSLA", from = "2011-01-01", to = "2024-12-31")
+data <- TSLA[, "TSLA.Close"]
 colnames(data) <- "Close"
 
 
@@ -164,7 +163,6 @@ for epoch in range(n_epochs):
     if epoch % 10 == 0 or epoch == n_epochs - 1:
         print(f"Epoch {epoch+1}/{n_epochs}, Loss: {epoch_loss:.6f}")
 ```
-
 # Predicción 
 
 ```{python}
@@ -229,7 +227,7 @@ datacompare <- py$datacompare
 ggplot(datacompare, aes(x = Date)) +
   geom_line(aes(y = `Data Test`, color = "Datos Reales"), linewidth = 1) +
   geom_line(aes(y = `Prediction Results`, color = "Predicciones"), linewidth = 1) +
-  labs(title = "Precio de cierre de Coca-Cola: predicción vs real",
+  labs(title = "Precio de cierre de Tesla: predicción vs real",
        x = "Fecha",
        y = "Precio",
        color = "") +
