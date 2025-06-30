@@ -1,23 +1,23 @@
-##  Estructura del repositorio
+#  Estructura del repositorio
 
-### `A.Exploratorio/`
+## `A.Exploratorio`
 Contiene el análisis exploratorio de los datos financieros de las cuatro empresas. 
 
-### `ARIMA/`
+## `ARIMA`
 Implementación del modelo ARIMA y autoarima de las cuatro empresas. 
 
-### `GRU/`
+## `GRU`
 Implementación GRU (Gated Recurrent Unit) de las cuatro empresas. 
 
-### `Prophet/`
+## `Prophet`
 Implementación del modelo Prophet de las cuatro empresas. 
 
-### `SegRNN/`
+## `SegRNN`
 Implementación SegRNN (Segmented Recurrent Neural Network) de las cuatro empresas. 
 
 - `SegRNN.py`: modelo SegRNN.
 
-### `TiDE/`
+## `TiDE/`
 Implementación TiDE (Time-series Dense Encoder) de las cuatro empresas. 
 
 - `TiDE.py`: modelo TiDE.
@@ -25,7 +25,7 @@ Implementación TiDE (Time-series Dense Encoder) de las cuatro empresas.
 
 ---
 
-## Empresas analizadas
+# Empresas 
 
 - **Coca-Cola (KO)**
 - **Disney (DIS)**
