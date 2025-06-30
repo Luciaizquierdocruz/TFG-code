@@ -1,5 +1,5 @@
 ---
-title: "Prophet Coca-Cola"
+title: "Prophet Disney"
 author: "Lucía Izquierdo"
 date: "2025-06-29"
 output: html_document
@@ -22,8 +22,8 @@ library(ggplot2)
 # Descargar datos y división
 
 ```{r}
-getSymbols("KO", from = "2000-01-01", to = "2024-12-31")
-df <- data.frame(ds = index(KO), y = as.numeric(KO$KO.Close))
+getSymbols("DIS", from = "2000-01-01", to = "2024-12-31")
+df <- data.frame(ds = index(DIS), y = as.numeric(DIS$DIS.Close))
 ```
 
 ```{r}
@@ -113,7 +113,7 @@ test_df_2024$ds  <- as.Date(test_df_2024$ds)
 ggplot() +
   geom_line(data = test_df_2024, aes(x = ds, y = y, color = "Datos Reales"), linewidth = 1) +
   geom_line(data = forecast_2024, aes(x = ds, y = yhat, color = "Predicciones"), linewidth = 1) +
-  labs(title = "Precio de cierre de Coca-Cola: predicción vs real (modelo m1)",
+  labs(title = "Precio de cierre de Disney: predicción vs real (modelo m1)",
        x = "Fecha",
        y = "Precio",
        color = "") +
@@ -130,7 +130,7 @@ forecast2_2024$ds <- as.Date(forecast2_2024$ds)
 ggplot() +
   geom_line(data = test_df_2024, aes(x = ds, y = y, color = "Datos Reales"), linewidth = 1) +
   geom_line(data = forecast2_2024, aes(x = ds, y = yhat, color = "Predicciones"), linewidth = 1) +
-  labs(title = "Precio de cierre de Coca-Cola: predicción vs real (modelo m2)",
+  labs(title = "Precio de cierre de Disney: predicción vs real (modelo m2)",
        x = "Fecha",
        y = "Precio",
        color = "") +
@@ -148,7 +148,7 @@ forecast3_2024$ds <- as.Date(forecast3_2024$ds)
 ggplot() +
   geom_line(data = test_df_2024, aes(x = ds, y = y, color = "Datos Reales"), linewidth = 1) +
   geom_line(data = forecast3_2024, aes(x = ds, y = yhat, color = "Predicciones"), linewidth = 1) +
-  labs(title = "Precio de cierre de Coca-Cola: predicción vs real (modelo m3)",
+  labs(title = "Precio de cierre de Disney: predicción vs real (modelo m3)",
        x = "Fecha",
        y = "Precio",
        color = "") +
