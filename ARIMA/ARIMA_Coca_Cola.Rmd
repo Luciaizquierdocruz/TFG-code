@@ -1,0 +1,369 @@
+---
+title: "ARIMA y autoARIMA Coca-Cola"
+author: "Lucía Izquierdo"
+date: "2025-06-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Carga librerias
+
+```{r}
+library(quantmod)
+library(forecast)
+library(tseries)
+library(seasonal)
+library(lubridate)
+library(tseries)
+```
+
+
+# ARIMA
+
+## Lectura datos y separación
+
+```{r}
+getSymbols("KO", from = "2000-01-01", to = "2024-12-31")
+close <- KO[, "KO.Close"]
+vector <- as.vector(KO$KO.Close)
+train <- close["/2023"]
+test <- close["2024"]
+
+ts_data <- ts(vector, frequency = 252, start = c(2000, 1))
+train_ts <- ts(as.numeric(train), frequency = 252, start = c(2000, 1))
+test_ts <- ts(as.numeric(test), frequency = 252, start = c(2024, 1))
+```
+
+## Transformación y diferenciación regular
+
+```{r}
+ln_data<-log(train_ts)
+d1_lnserie<-diff(ln_data) 
+plot(d1_lnserie,main="d1d252serie")
+abline(h=0)
+mean(d1_lnserie)
+```
+
+## ACF y PACF
+
+```{r}
+acf(d1_lnserie, col=c(2,rep(1,11)), lwd=2, lag.max = 60, main = "ACF", ylim=c(-0.045,0.045))
+pacf(d1_lnserie, col=c(2,rep(1,11),2), lwd=2, lag.max = 60., main = "PACF")
+```
+ 
+## Estimación de los modelos
+
+**Modelo 1: AR(1)**
+
+```{r}
+(m1 <- arima(d1_lnserie, order = c(1,0,0)))
+round(m1$coef/sqrt(diag(m1$var.coef)),2)
+```
+
+
+```{r}
+(m1.1 <- arima(d1_lnserie, order = c(0,0,0)))
+round(m1.1$coef/sqrt(diag(m1.1$var.coef)),2)
+```
+
+
+**Modelo 2: AR(3)**
+
+```{r}
+(m2 <- arima(d1_lnserie, order = c(3,0,0)))
+round(m2$coef/sqrt(diag(m2$var.coef)),2)
+```
+
+
+```{r}
+(m2.1 <- arima(d1_lnserie, order = c(2,0,0)))
+round(m2.1$coef/sqrt(diag(m2.1$var.coef)),2)
+```
+
+
+**Modelo 3: MA(2)**
+
+```{r}
+(m3 <- arima(d1_lnserie, order = c(0,0,2)))
+round(m3$coef/sqrt(diag(m3$var.coef)),2)
+```
+
+
+**Modelo 4: Ma(4)**
+
+```{r}
+(m4 <- arima(d1_lnserie, order = c(0,0,4)))
+round(m4$coef/sqrt(diag(m4$var.coef)),2)
+```
+
+
+**Modelo 5: AR(1)MA(2)**
+
+```{r}
+(m5 <- arima(d1_lnserie, order = c(1,0,2)))
+round(m5$coef/sqrt(diag(m5$var.coef)),2)
+```
+
+```{r}
+(m5.1 <- arima(d1_lnserie, order = c(1,0,1)))
+round(m5.1$coef/sqrt(diag(m5.1$var.coef)),2)
+```
+
+**Modelo 6: AR(1)MA(4)**
+
+```{r}
+(m6 <- arima(d1_lnserie, order = c(1,0,4)))
+round(m6$coef/sqrt(diag(m6$var.coef)),2)
+```
+
+**Modelo 7: AR(3)MA(2)**
+
+```{r}
+(m7 <- arima(d1_lnserie, order = c(3,0,2)))
+round(m7$coef/sqrt(diag(m7$var.coef)),2)
+```
+
+```{r}
+(m7.1 <- arima(d1_lnserie, order = c(2,0,2)))
+round(m7.1$coef/sqrt(diag(m7.1$var.coef)),2)
+```
+
+**Modelo 8: AR(3)MA(4)**
+
+```{r}
+(m8 <- arima(d1_lnserie, order = c(3,0,4))) # 3 0 4
+round(m8$coef/sqrt(diag(m8$var.coef)),2)
+```
+
+## Elección del mejor modelo 
+
+```{r}
+#modelos con signif y que convergen bien
+modelos <- c(m1.1$aic,m2.1$aic, m3$aic, m4$aic, m5.1$aic, m6$aic, m7.1$aic)
+which.min(modelos)
+min(modelos)
+```
+
+Mejor modelo --> Modelo 7.1: ARIMA(2,1,2)
+
+## Predicción 
+
+```{r}
+mod <- arima(log(train_ts), order = c(2,1,2))  
+
+# Predecir en escala log
+n_test <- length(test_ts)
+forecast_log <- forecast(mod, h = n_test)
+
+# Volver a escala original con exp()
+forecast_values <- exp(forecast_log$mean)
+lower <- exp(forecast_log$lower[, 2])  # 95% inferior
+upper <- exp(forecast_log$upper[, 2])  # 95% superior
+
+# Crear objeto ts para las predicciones y bandas
+forecast_ts <- ts(forecast_values, frequency = 252, start = c(2024, 1))
+lower_ts    <- ts(lower, frequency = 252, start = c(2024, 1))
+upper_ts    <- ts(upper, frequency = 252, start = c(2024, 1))
+```
+
+## Diagnosis
+
+```{r}
+obs <- as.numeric(test_ts)
+preds <- as.numeric(forecast_values)
+errors <- preds - obs
+
+mae <- mean(abs(errors))
+mape <- mean(abs(errors / obs)) * 100
+mse <- mean(errors^2)
+rmse <- sqrt(mse)
+
+# Mostrar resultados
+cat("Métricas de error para el conjunto de test (2024):\n")
+cat(sprintf("MAE  = %.4f\n", mae))
+cat(sprintf("MAPE = %.4f %%\n", mape))
+cat(sprintf("MSE  = %.4f\n", mse))
+cat(sprintf("RMSE = %.4f\n", rmse))
+
+# Graficar
+ts.plot(ts_data, lower_ts, upper_ts, forecast_ts,
+        lty = c(1,2,2,1),
+        col = c(1,4,4,2),
+        xlim = c(2024, 2025),
+        main = "Predicción Coca-Cola 2024 con ARIMA(2,1,2)",
+        ylab = "Precio cierre")
+abline(v=2021:2025, lty=3, col=4)
+```
+
+
+# AUTOARIMA
+
+```{r}
+getSymbols("KO", from = "2000-01-01", to = "2024-12-31")
+close <- KO[, "KO.Close"]
+vector <- as.vector(KO$KO.Close)
+train <- close["/2023"]
+test <- close["2024"]
+
+ts_data <- ts(vector, frequency = 252, start = c(2000, 1))
+train_ts <- ts(as.numeric(train), frequency = 252, start = c(2000, 1))
+test_ts <- ts(as.numeric(test), frequency = 252, start = c(2024, 1))
+
+# Ajustar modelo ARIMA sobre log(train)
+fit <- auto.arima(log(train_ts))
+summary(fit)
+
+# Predecir en escala log
+n_test <- length(test_ts)
+forecast_log <- forecast(fit, h = n_test)
+
+# Volver a escala original con exp()
+forecast_values <- exp(forecast_log$mean)
+lower <- exp(forecast_log$lower[, 2])  # 95% inferior
+upper <- exp(forecast_log$upper[, 2])  # 95% superior
+
+# Crear objeto ts para las predicciones y bandas
+forecast_ts <- ts(forecast_values, frequency = 252, start = c(2024, 1))
+lower_ts    <- ts(lower, frequency = 252, start = c(2024, 1))
+upper_ts    <- ts(upper, frequency = 252, start = c(2024, 1))
+
+# Graficar
+ts.plot(ts_data, lower_ts, upper_ts, forecast_ts,
+        lty = c(1,2,2,1),
+        col = c(1,4,4,2),
+        xlim = c(2024, 2025),
+        main = "Predicción Coa-Cola 2024 con ARIMA(2,1,2)",
+        ylab = "Precio cierre")
+abline(v=2021:2025, lty=3, col=4)
+
+# Calcular métricas de error
+obs <- as.numeric(test_ts)
+preds <- as.numeric(forecast_values)
+errors <- preds - obs
+
+mae <- mean(abs(errors))
+mape <- mean(abs(errors / obs)) * 100
+mse <- mean(errors^2)
+rmse <- sqrt(mse)
+
+# Mostrar resultados
+cat("Métricas de error para el conjunto de test (2024):\n")
+cat(sprintf("MAE  = %.4f\n", mae))
+cat(sprintf("MAPE = %.4f %%\n", mape))
+cat(sprintf("MSE  = %.4f\n", mse))
+cat(sprintf("RMSE = %.4f\n", rmse))
+```
+
+
+# VALIDACIÓN
+
+```{r}
+#################Validation#################################
+validation=function(model){
+  s=frequency(get(model$series))
+  resid=model$residuals
+  par(mfrow=c(2,2),mar=c(3,3,3,3))
+  #Residuals plot
+  plot(resid,main="Residuals")
+  abline(h=0)
+  abline(h=c(-3*sd(resid),3*sd(resid)),lty=3,col=4)
+  #Square Root of absolute values of residuals (Homocedasticity)
+  scatter.smooth(sqrt(abs(resid)),main="Square Root of Absolute residuals",
+                 lpars=list(col=2))
+  
+  #Normal plot of residuals
+  qqnorm(resid)
+  qqline(resid,col=2,lwd=2)
+  
+  ##Histogram of residuals with normal curve
+  hist(resid,breaks=20,freq=FALSE)
+  curve(dnorm(x,mean=mean(resid),sd=sd(resid)),col=2,add=T)
+  
+  
+  #ACF & PACF of residuals
+  par(mfrow=c(1,2))
+  acf(resid,ylim=c(-1,1),lag.max=60,col=c(2,rep(1,s-1)),lwd=1)
+  pacf(resid,ylim=c(-1,1),lag.max=60,col=c(rep(1,s-1),2),lwd=1)
+  par(mfrow=c(1,1))
+  
+  #ACF & PACF of square residuals 
+  par(mfrow=c(1,2))
+  acf(resid^2,ylim=c(-1,1),lag.max=60,col=c(2,rep(1,s-1)),lwd=1)
+  pacf(resid^2,ylim=c(-1,1),lag.max=60,col=c(rep(1,s-1),2),lwd=1)
+  par(mfrow=c(1,1))
+  
+  #Ljung-Box p-values
+  par(mar=c(2,2,1,1))
+  tsdiag(model,gof.lag=7*s)
+  cat("\n--------------------------------------------------------------------\n")
+  print(model)
+  
+  #Stationary and Invertible
+  cat("\nModul of AR Characteristic polynomial Roots: ", 
+      Mod(polyroot(c(1,-model$model$phi))),"\n")
+  cat("\nModul of MA Characteristic polynomial Roots: ",
+      Mod(polyroot(c(1,model$model$theta))),"\n")
+
+  
+  #Model expressed as an MA infinity (psi-weights)
+  psis=ARMAtoMA(ar=model$model$phi,ma=model$model$theta,lag.max=36)
+  names(psis)=paste("psi",1:36)
+  cat("\nPsi-weights (MA(inf))\n")
+  cat("\n--------------------\n")
+  print(psis[1:20])
+  
+   #Model expressed as an AR infinity (pi-weights)
+  pis=-ARMAtoMA(ar=-model$model$theta,ma=-model$model$phi,lag.max=36)
+  names(pis)=paste("pi",1:36)
+  cat("\nPi-weights (AR(inf))\n")
+  cat("\n--------------------\n")
+  print(pis[1:20])
+  
+  ## Add here complementary tests (use with caution!)
+  ##---------------------------------------------------------
+  cat("\nNormality Tests\n")
+  cat("\n--------------------\n")
+ 
+  ##Shapiro-Wilks Normality test
+  #print(shapiro.test(resid(model)))
+
+  suppressMessages(require(nortest,quietly=TRUE,warn.conflicts=FALSE))
+  ##Anderson-Darling test
+  print(ad.test(resid(model)))
+  
+  suppressMessages(require(tseries,quietly=TRUE,warn.conflicts=FALSE))
+  ##Jarque-Bera test
+  print(jarque.bera.test(resid(model)))
+  
+  cat("\nHomoscedasticity Test\n")
+  cat("\n--------------------\n")
+  suppressMessages(require(lmtest,quietly=TRUE,warn.conflicts=FALSE))
+  ##Breusch-Pagan test
+  obs=get(model$series)
+  print(bptest(resid(model)~I(obs-resid(model))))
+  
+  cat("\nIndependence Tests\n")
+  cat("\n--------------------\n")
+  
+  ##Durbin-Watson test
+  print(dwtest(resid(model)~I(1:length(resid(model)))))
+  
+  ##Ljung-Box test
+  cat("\nLjung-Box test\n")
+  print(t(apply(matrix(c(1:4,(1:4)*s)),1,function(el) {
+    te=Box.test(resid(model),type="Ljung-Box",lag=el)
+    c(lag=(te$parameter),statistic=te$statistic[[1]],p.value=te$p.value)})))
+  ##************End of complementary tests******************************************
+
+################# Fi Validación ('Validation') #################################
+}  
+```
+
+```{r}
+modelo <- arima(ln_data, order = c(2,1,2))  #log(train_ts)
+validation(modelo)
+```
+
