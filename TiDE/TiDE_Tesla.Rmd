@@ -1,0 +1,108 @@
+---
+title: "TiDE Tesla"
+author: "Lucía Izquierdo"
+date: "2025-06-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Carga de librerias
+
+```{r}
+library(reticulate)
+library(quantmod)
+library(dplyr)
+library(ggplot2)
+library(Metrics)  
+```
+
+
+# Carga de datos y separación
+
+```{r}
+# Descargar datos con quantmod
+getSymbols("TSLA", from = "2011-01-01", to = "2025-01-01", auto.assign = TRUE)
+
+# TSLA está en un xts, lo convertimos a data.frame
+df <- data.frame(Date = index(TSLA), Close = as.numeric(Cl(TSLA)))
+
+# Filtrar valores NA solo en Close
+df <- df %>% filter(!is.na(Close))
+
+# Dividir en train y test según fecha
+train_df <- df %>% filter(Date < as.Date("2024-01-01"))
+test_df <- df %>% filter(Date >= as.Date("2024-01-01"))
+```
+
+
+# Entrenamiento y predicción
+
+```{r}
+# Convertir a pandas
+pd <- import("pandas")
+train_pd <- r_to_py(train_df)
+test_pd <- r_to_py(test_df)
+
+source_python("run_tide.py")
+preds_train <- main(train_pd, test_pd)  # predicciones para test_df
+
+# Configuraciones usadas en Python
+seq_len <- 20
+pred_len <- 10
+
+# Ya no quitar los primeros (seq_len + pred_len) días de test, tomamos toda la fecha de test
+pred_dates <- test_df$Date[1:length(preds_train)]
+```
+
+# Metricas y grafico 
+
+```{r}
+# Comprobar que coincida
+stopifnot(length(pred_dates) == length(preds_train))
+
+# Crear dataframe de predicciones
+df_preds <- data.frame(
+  Date = pred_dates,
+  Pred_Close = preds_train
+)
+
+# Para comparar con valores reales, tomar las mismas fechas del test
+df_real_vs_pred <- data.frame(
+  Date = pred_dates,
+  Real_Close = test_df$Close[1:length(preds_train)],
+  Pred_Close = preds_train
+)
+
+
+# Supongamos que tienes ya el dataframe df_real_vs_pred con columnas:
+# Date, Real_Close, Pred_Close
+
+# Calcular métricas
+rmse_val <- Metrics::rmse(df_real_vs_pred$Real_Close, df_real_vs_pred$Pred_Close)
+mse_val  <- Metrics::mse(df_real_vs_pred$Real_Close, df_real_vs_pred$Pred_Close)
+mae_val  <- Metrics::mae(df_real_vs_pred$Real_Close, df_real_vs_pred$Pred_Close)
+
+# Para MAPE, definimos función (evitando divisiones por 0)
+mape <- function(actual, predicted) {
+  mean(abs((actual - predicted) / ifelse(actual == 0, NA, actual)), na.rm = TRUE) * 100
+}
+mape_val <- mape(df_real_vs_pred$Real_Close, df_real_vs_pred$Pred_Close)
+
+# Mostrar métricas
+cat(sprintf("RMSE: %.4f\nMSE: %.4f\nMAE: %.4f\nMAPE: %.4f%%\n", rmse_val, mse_val, mae_val, mape_val))
+
+# Gráfica
+ggplot(df_real_vs_pred, aes(x = Date)) +
+  geom_line(aes(y = Real_Close, color = "Datos Reales"),linewidth = 1) +
+  geom_line(aes(y = Pred_Close, color = "Predicciones"),linewidth = 1) +
+  labs(title = "Precio de cierre de Tesla: predicción vs real",
+       y = "Precio",
+       x = "Fecha",
+       color = "") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
