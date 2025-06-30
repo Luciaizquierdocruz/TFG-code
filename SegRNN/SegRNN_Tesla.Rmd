@@ -1,0 +1,248 @@
+---
+title: "SegRNN Tesla"
+author: "Lucía Izquierdo"
+date: "2025-06-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Entorno de Python
+
+Se establece el entorno de python descragado.
+
+```{r}
+library(reticulate)
+
+# Establece manualmente la ruta al ejecutable de Python 3.10
+use_python("C:/Program Files/Python310/python.exe", required = TRUE)
+
+# Comprueba que está usándose correctamente
+py_config()
+```
+
+# Carga de librerias de R
+
+```{r}
+library(tensorflow)
+library(quantmod)
+library(ggplot2)
+```
+
+# Directorio de trabajo 
+
+```{r}
+setwd("C:/Users/izqui/OneDrive/Desktop/TFG/Github") #directorio modelo
+reticulate::repl_python()
+```
+
+# Carga de librerias de python
+
+```{python}
+import pandas as pd
+import numpy as np
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+import yfinance as yf  
+from SegRNN import Model  # Tener en el directorio que estas trabajando el modelo SegRNN.py
+
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#Entrenar modelos con redes neuronale es mucho más rápido en una GPU que en CPU. Por eso PyTorch permite mover los datos y modelos a ese dispositivo.
+#Si tienes una GPU compatible las usará,si no, usará cpu, es decir, el procesador normal.
+```
+
+# Carga de datos 
+
+```{python}
+df = yf.download('TSLA', start='2011-01-01', end='2025-01-01')
+df = df.reset_index()
+df = df[['Date', 'Close']].dropna()
+df['Date'] = pd.to_datetime(df['Date'])
+df
+```
+
+
+# Preprocessamiento datos
+
+```{python}
+# Asegura el formato
+df['Date'] = pd.to_datetime(df['Date'])
+df = df.sort_values('Date').reset_index(drop=True)
+```
+
+**normalizar datos**
+
+```{python}
+scaler = MinMaxScaler()
+df['Close_scaled'] = scaler.fit_transform(df[['Close']])
+```
+
+**particion en test y train**
+
+```{python}
+train_df = df[df['Date'] < '2024-01-01']
+test_df = df[df['Date'] >= '2024-01-01']
+```
+
+
+# Sliding Windows 
+
+```{python}
+from torch.utils.data import Dataset
+
+class TimeSeriesDataset(Dataset):
+    def __init__(self, series, seq_len, pred_len):
+        self.series = series
+        self.seq_len = seq_len
+        self.pred_len = pred_len
+
+    def __len__(self):
+        return len(self.series) - self.seq_len - self.pred_len + 1
+
+    def __getitem__(self, idx):
+        x = self.series[idx : idx + self.seq_len]
+        y = self.series[idx + self.seq_len : idx + self.seq_len + self.pred_len]
+        # output shape: (seq_len, 1), (pred_len, 1)
+        x = torch.tensor(x, dtype=torch.float32).unsqueeze(-1)
+        y = torch.tensor(y, dtype=torch.float32).unsqueeze(-1)
+        return x, y
+```
+
+# Modelo SegRNN
+
+```{python}
+class Config:
+    def __init__(self):
+        self.seq_len = 60
+        self.pred_len = 10
+        self.enc_in = 1
+        self.d_model = 64
+        self.dropout = 0.2
+        self.seg_len = 10
+        self.task_name = 'long_term_forecast'
+
+configs = Config()
+model = Model(configs).to(device)
+```
+
+**Entrenamiento**
+
+```{python}
+train_dataset = TimeSeriesDataset(train_df['Close_scaled'].values, seq_len=60, pred_len=10)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+
+criterion = torch.nn.MSELoss()
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+
+epochs = 100
+model.train()
+for epoch in range(epochs):
+    epoch_loss = 0
+    for x, y in train_loader:
+        x = x.to(device)  # [B, 60, 1]
+        y = y.to(device)  # [B, 10, 1]
+        optimizer.zero_grad()
+        out = model(x, None, None, None)  # [B, 10, 1]
+        loss = criterion(out, y)
+        loss.backward()
+        optimizer.step()
+        epoch_loss += loss.item()
+    print(f"Epoch {epoch+1}, Loss: {epoch_loss:.4f}")
+```
+
+
+# Predicción
+
+```{python}
+model.eval()
+seq_len = 60
+pred_len = 1
+preds = []
+true_vals = []
+
+with torch.no_grad():
+    full_series = df['Close_scaled'].values
+    date_index = df['Date']
+
+    for i in range(len(test_df)):
+        idx = train_df.shape[0] + i
+        if idx - seq_len < 0:
+            continue
+        x_input = full_series[idx - seq_len:idx]
+        x_tensor = torch.tensor(x_input, dtype=torch.float32).unsqueeze(0).unsqueeze(-1).to(device)  # (1, seq_len, 1)
+        y_true = full_series[idx]
+        y_pred = model(x_tensor, None, None, None).cpu().numpy().flatten()[0]
+        preds.append(y_pred)
+        true_vals.append(y_true)
+
+```
+
+**Invertimos la normalización**
+
+```{python}
+preds_real = scaler.inverse_transform(np.array(preds).reshape(-1, 1)).flatten()
+true_real = scaler.inverse_transform(np.array(true_vals).reshape(-1, 1)).flatten()
+```
+
+
+# Comparación predicciión con el data set 
+
+```{python}
+# Crear DataFrame de comparación
+datacompare = pd.DataFrame()
+datatest = np.array(true_real)               # valores reales (invertidos)
+datapred = np.array(preds_real)              # predicciones (invertidas)
+
+datacompare['Data Test'] = datatest
+datacompare['Prediction Results'] = datapred
+datacompare['Date'] = test_df['Date'].values[:len(datatest)]  # añadir fechas
+```
+
+**Metricas**
+
+```{python}
+# Funciones métricas
+def rmse(datatest, datapred):
+    return np.round(np.sqrt(np.mean((datapred - datatest) ** 2)), 4)
+
+def mape(datatest, datapred): 
+    return np.round(np.mean(np.abs((datatest - datapred) / datatest) * 100), 4)
+
+mae_value = np.round(mean_absolute_error(datatest, datapred), 4)
+mse_value = np.round(mean_squared_error(datatest, datapred), 4)
+rmse_value = rmse(datatest, datapred)
+mape_value = mape(datatest, datapred)
+
+# Línea resumen con todos los resultados
+print(f"\nResumen de métricas -> MAE: {mae_value} | MSE: {mse_value} | RMSE: {rmse_value} | MAPE: {mape_value}%")
+
+```
+
+**Grafico preds vs obs**
+
+```{r}
+# Cargar objeto de Python
+datacompare <- py$datacompare
+
+# Asegurar formato fecha
+datacompare$Date <- as.Date(datacompare$Date)
+
+# Gráfico
+ggplot(datacompare, aes(x = Date)) +
+  geom_line(aes(y = `Data Test`, color = "Datos Reales"), linewidth = 1) +
+  geom_line(aes(y = `Prediction Results`, color = "Predicciones"), linewidth = 1) +
+  labs(title = "Precio de cierre de Tesla: predicción vs real",
+       x = "Fecha",
+       y = "Precio",
+       color = "") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
