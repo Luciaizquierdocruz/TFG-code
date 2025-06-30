@@ -17,7 +17,7 @@ Implementación SegRNN (Segmented Recurrent Neural Network) de las cuatro empres
 
 - `SegRNN.py`: modelo SegRNN.
 
-## `TiDE/`
+## `TiDE`
 Implementación TiDE (Time-series Dense Encoder) de las cuatro empresas. 
 
 - `TiDE.py`: modelo TiDE.
