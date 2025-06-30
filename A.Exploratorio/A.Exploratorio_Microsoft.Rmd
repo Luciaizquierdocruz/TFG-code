@@ -1,5 +1,5 @@
 ---
-title: "Analisis Exploratorio Coca-Cola"
+title: "Analisis Exploratorio Microsoft"
 author: "Lucía Izquierdo"
 date: "2025-06-26"
 output: html_document
@@ -8,7 +8,6 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
 
 # Carga de librerias
 
@@ -26,15 +25,15 @@ library(PerformanceAnalytics)
 # Carga de datos
 
 ```{r}
-getSymbols("KO", from = "2000-01-01", to = "2024-12-31")
-data <- KO[, "KO.Close"]
+getSymbols("MSFT", from = "2000-01-01", to = "2024-12-31")
+data <- MSFT[, "MSFT.Close"]
 ```
 
 ## Estadísticos importantes
 
 ```{r}
 # Convertir a vector numérico
-precios <- as.numeric(data$KO.Close)
+precios <- as.numeric(data$MSFT.Close)
 
 # Calcular retornos logarítmicos (más usual en finanzas)
 retornos <- diff(log(precios))
@@ -83,7 +82,7 @@ ggplot(df, aes(x = date, y = close)) +
   geom_line(color = "#1f77b4", size = 0.6) +
   geom_smooth(method = "loess", span = 0.15, se = TRUE, fill = "#a6cee3", color = "#08306B", alpha = 0.3) +
   scale_y_continuous(labels = dollar_format(prefix = "$")) +
-  labs(title = "Precio de Cierre de Coca-Cola (KO)",
+  labs(title = "Precio de Cierre de Microsoft (MSFT)",
        subtitle = "Del 2000 al 2024",
        x = "Fecha",
        y = "Precio de Cierre") +
@@ -102,8 +101,8 @@ ggplot(df, aes(x = date, y = close)) +
 ```{r}
 # Convertir a data frame y extraer componentes temporales
 
-df_boxplot <- data.frame(date = index(KO),
-                 close = as.numeric(KO[, "KO.Close"])) %>%
+df_boxplot <- data.frame(date = index(MSFT),
+                 close = as.numeric(MSFT[, "MSFT.Close"])) %>%
   mutate(year = year(date),
          month = month(date, label = TRUE, abbr = TRUE))
 
